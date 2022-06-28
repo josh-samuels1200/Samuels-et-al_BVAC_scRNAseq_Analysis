@@ -7,7 +7,7 @@ Joshua D. Samuels*, Madison L. Lotstein, Michael L. Lehmann, Abdel G. Elkahloun,
 `*` Corresponding author at rhk9gh@virginia.edu
 
 
-Description of contents...
+The R folder contains the R code used in the workflow to process and analyze the CSD1, CSD2, HC1, and HC2 scRNAseq samples. The packages and versions at the time the analysis was conduced can be found in the RStudio-Packages-and-Versions folder.
 
 
 Mouse BVAC scRNAseq Workflow:
