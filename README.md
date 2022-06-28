@@ -11,22 +11,22 @@ Description of contents...
 
 
 Mouse BVAC scRNAseq Workflow:
-1. Mouse_Neurovascular_scRNAseq_QC_Integration
+1. R/Mouse_Neurovascular_scRNAseq_QC_Integration
 - Using Seurat pipeline with QC, normalization, SCTransform, and integration steps.
 
-2. Mouse_Neurovascular_scRNAseq_Clustering
+2. R/Mouse_Neurovascular_scRNAseq_Clustering
 - Use signature gene identifiers from literature + exported cluster signature gene excel spreadsheets + Mouse_Neurovascular_scRNAseq_Cluster_Interrogation
 
-3. Mouse_Neurovascular_scRNAseq_CSDvsHC_Differential_Expression
+3. R/Mouse_Neurovascular_scRNAseq_CSDvsHC_Differential_Expression
 - Creates DE gene lists for all clusters identified
 
-4. Mouse_Neurovascular_scRNAseq_DE_Gene_Pathway_Enrichment_Analysis
+4. R/Mouse_Neurovascular_scRNAseq_DE_Gene_Pathway_Enrichment_Analysis
 - Condenses pathway analyses run (i.e., Reactome, GO: Biological Processes) using DE genes into a heatmap figure
 
-5. Mouse_Neurovascular_scRNAseq_Cluster_Interrogation
+5. R/Mouse_Neurovascular_scRNAseq_Cluster_Interrogation
 - Used to examine clusters by gene expression, create feature plots, and make heatmaps
 
 Other Important Scripts:
-1. R_Package_and_Version_Extraction_Code
+1. R/R_Package_and_Version_Extraction_Code
 - Creates a list of all packages used during the workflow along with the package versions
 
