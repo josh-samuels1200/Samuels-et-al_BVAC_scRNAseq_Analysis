@@ -1,0 +1,884 @@
+---
+title: "Mouse Neurovascular scRNAseq: Clustering"
+author: "Joshua Samuels"
+date: "8/4/2021"
+output: html_document
+---
+
+
+
+### Load Libraries
+
+```{r message=FALSE, warning=FALSE}
+# Load libraries
+library(SingleCellExperiment)
+library(Seurat)
+library(tidyverse)
+library(Matrix)
+library(scales)
+library(cowplot)
+library(RCurl)
+library(BiocManager)
+library(ggplot2)
+library(dplyr)
+library(magrittr)
+library(patchwork)
+library(ggraph)
+library(clustree)
+```
+
+
+```{r}
+# Load integrated data following the QC and Integration steps
+seurat_integrated <-readRDS(
+  "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/Data_Objects/seurat_integrated190820.rds")
+```
+
+
+```{r}
+# Run PCA
+seurat_integrated <- RunPCA(object = seurat_integrated)
+
+# Plot PCA
+PCAPlot(seurat_integrated, split.by = "sample_number")  
+```
+
+### Cluster with Louvain
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+# Determine the K-nearest neighbor graph
+seurat_integrated <- FindNeighbors(object = seurat_integrated, 
+                                dims = 1:40)
+                                
+# Determine the clusters for various resolutions                                
+seurat_integrated <- FindClusters(object = seurat_integrated,
+                               resolution = c(0.4, 0.6, 0.8, 1.0, 1.4, 1.5, 1.6))
+```
+
+### Explore the clusters
+
+```{r include=FALSE}
+# Run UMAP
+seurat_integrated <- RunUMAP(seurat_integrated, 
+                             dims = 1:40,
+			                       reduction = "pca")
+```
+
+### UMAP at 0.8 (multiple resolutions are tested below)
+
+```{r}
+# Assign identity of clusters
+Idents(object = seurat_integrated) <- "integrated_snn_res.0.8"
+# Plot the UMAP
+DimPlot(seurat_integrated,
+        reduction = "umap",
+        label = TRUE,
+        label.size = 6)
+```
+
+### UMAP at 1.4
+
+```{r}
+# Assign identity of clusters
+Idents(object = seurat_integrated) <- "integrated_snn_res.1.4"
+# Plot the UMAP
+DimPlot(seurat_integrated,
+        reduction = "umap",
+        label = TRUE,
+        label.size = 6)
+```
+
+### UMAP at 1.5
+
+```{r}
+# Assign identity of clusters
+Idents(object = seurat_integrated) <- "integrated_snn_res.1.5"
+# Plot the UMAP
+DimPlot(seurat_integrated,
+        reduction = "umap",
+        label = TRUE,
+        label.size = 6)
+```
+
+### UMAP at 1.6
+
+```{r}
+# Assign identity of clusters
+Idents(object = seurat_integrated) <- "integrated_snn_res.1.6"
+# Plot the UMAP
+DimPlot(seurat_integrated,
+        reduction = "umap",
+        label = TRUE,
+        label.size = 6)
+```
+
+### Segregation of clusters by sample
+
+We can start by exploring the distribution of cells per cluster in each sample:
+```{r}
+# Extract identity and sample information from seurat object to determine the number of cells per cluster per sample
+n_cells <- FetchData(seurat_integrated, 
+                     vars = c("ident", "orig.ident")) %>%
+        dplyr::count(ident, orig.ident) %>%
+        tidyr::spread(ident, n)
+
+# View table
+View(n_cells)
+
+# Save the number of cells per cluster as a .csv file
+write.csv(n_cells, file = 
+            "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/Gene_Lists/Seurat4.0_nCells_res1.6_Josh_8.21.csv")
+```
+
+### Segregation of clusters by cell cycle phase (optional)
+
+Next we can explore whether the cells cluster by the different cell cycle phases. We did not regress out variation due to cell cycle phase when we performed the SCTransform normalization and regression of uninteresting sources of variation. If our cell clusters showed large differences in mitochondrial expression, this would be an indication we would want to re-run the SCTransform and add the S.Score and G2M.Score to our variables to regress, then re-run the rest of the steps.
+```{r}
+# # Explore whether clusters segregate by cell cycle phase
+# DimPlot(seurat_integrated,
+#         label = TRUE, 
+#         split.by = "Phase")  + NoLegend()
+```
+
+### Segregation of clusters by various sources of uninteresting variation
+
+Next we will explore additional metrics, such as the number of UMIs and genes per cell, S-phase and G2M-phase markers, and mitochondrial gene expression by UMAP. Looking at the individual S and G2M scores can give us additional information to checking the phase as we did previously.
+```{r}
+# Determine metrics to plot present in seurat_integrated@meta.data
+
+# metrics <-  c("nUMI", "nGene", "S.Score", "G2M.Score", "mitoRatio")
+# FeaturePlot(seurat_integrated, 
+#             reduction = "umap", 
+#             features = metrics,
+#             pt.size = 0.4, 
+#             sort.cell = TRUE,
+#             min.cutoff = 'q10',
+#             label = TRUE,
+#             label.size=3)
+
+FeaturePlot(seurat_integrated, 
+            reduction = "umap", 
+            features = "mitoRatio",
+            pt.size = 0.4, 
+            sort.cell = TRUE,
+            min.cutoff = 'q10',
+            label = TRUE,
+            label.size=3)
+
+FeaturePlot(seurat_integrated, 
+            reduction = "umap", 
+            features = "nUMI",
+            pt.size = 0.4, 
+            sort.cell = TRUE,
+            min.cutoff = 'q10',
+            label = TRUE,
+            label.size=3)
+
+FeaturePlot(seurat_integrated, 
+            reduction = "umap", 
+            features = "nGene",
+            pt.size = 0.4, 
+            sort.cell = TRUE,
+            min.cutoff = 'q10',
+            label = TRUE,
+            label.size=3)
+
+VlnPlot(seurat_integrated, features = "mitoRatio")
+VlnPlot(seurat_integrated, features = "nGene")
+VlnPlot(seurat_integrated, features = "nUMI")
+```
+
+### Exploration of the PCs driving the different clusters
+
+```{r}
+#First, we identify the information we would like to extract from the Seurat object, then, we can use the FetchData() function to extract it.
+
+# Defining the information in the seurat object of interest
+columns <- c(paste0("PC_", 1:16),
+            "ident",
+            "UMAP_1", "UMAP_2")
+
+# Extracting this data from the seurat object
+pc_data <- FetchData(seurat_integrated, 
+                     vars = columns)
+
+# Extract the UMAP coordinates for the first 10 cells
+seurat_integrated@reductions$umap@cell.embeddings[1:10, 1:2]
+
+# Adding cluster label to center of cluster on UMAP
+umap_label <- FetchData(seurat_integrated, 
+                        vars = c("ident", "UMAP_1", "UMAP_2"))  %>%
+  group_by(ident) %>%
+  summarise(x=mean(UMAP_1), y=mean(UMAP_2))
+  
+# Plotting a UMAP plot for each of the PCs
+map(paste0("PC_", 1:16), function(pc){
+        ggplot(pc_data, 
+               aes(UMAP_1, UMAP_2)) +
+                geom_point(aes_string(color=pc), 
+                           alpha = 0.7) +
+                scale_color_gradient(guide = FALSE, 
+                                     low = "grey90", 
+                                     high = "blue")  +
+                geom_text(data=umap_label, 
+                          aes(label=ident, x, y)) +
+                ggtitle(pc)
+}) %>% 
+        plot_grid(plotlist = .)
+```
+
+```{r}
+# Select the RNA counts slot to be the default assay
+DefaultAssay(seurat_integrated) <- "RNA"
+
+# Normalize RNA data for visualization purposes
+seurat_integrated <- NormalizeData(seurat_integrated, verbose = FALSE)
+
+# Plot the UMAP
+DimPlot(seurat_integrated,
+        reduction = "umap",
+        label = TRUE,
+        label.size = 6)
+```
+
+```{r}
+# test a feature plat with a gene of interest
+FeaturePlot(seurat_integrated,
+            reduction = "umap", 
+            features = c("Npy"),
+            #split.by = "sample",
+            sort.cell = TRUE,
+            min.cutoff = 'q10', 
+            label = TRUE)
+```
+
+### Cluster Identification
+
+## Find Signature Markers
+
+```{r}
+# FindConservedMarkers function can be used here if desired - FindMarkers works similarly (see below)
+
+# conserved.markers <- FindConservedMarkers(seurat_integrated,
+#                      ident.1 = c(30),
+#                      grouping.var = "sample",
+#                      only.pos = TRUE,
+# 		     min.diff.pct = 0.25,
+#                      min.pct = 0.25,
+# 		     logfc.threshold = 0.25)
+# view(conserved.markers)
+```
+
+## Find sig markers for all clusters
+
+```{r}
+# Find all sig markers for each cluster compared to all other clusters. Save list to ".csv" file.
+All_Sig_Markers <- FindAllMarkers(
+  seurat_integrated, only.pos = T, min.pct = 0.20, logfc.threshold = 0.25, assay = "RNA")
+
+# Prepare the list of Sig markers
+All_Sig_Markers_List <- All_Sig_Markers %>%
+  group_by(cluster) %>%
+  top_n(n = 100, wt = avg_log2FC)
+
+# Export Sig markers to .csv file. Make sure to save file as .xls file!
+write.csv(All_Sig_Markers_List, file = 
+            "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/Gene_Lists/Seurat4.0_seurat_integrated_Sig_Markers_res1.6_Josh_8.21.csv")
+```
+
+## Find sig markers for specified clusters (optional)
+
+```{r}
+# # Able to put in cluster numbers to the ident.1 and ident.2 functions to compare specific clusters. Able to put in multiple cluster numbers into ident.2 to compare ident.1 against.
+# cluster.markers <- FindMarkers(seurat_integrated,
+#                           ident.1 = c(5),
+#                           ident.2 = c(16),
+#             only.pos = TRUE,
+#             #min.diff.pct = 0.25,
+#                      min.pct = 0.20,
+#             logfc.threshold = 0.25)
+# 
+# # Converts rownames to 1st column with the column name as "Gene"
+# cluster.markers <- tibble::rownames_to_column(cluster.markers, "Gene")
+# view(cluster.markers)
+```
+
+
+### Stop and assess sig markers. Use the Mouse_Neurovascular_scRNAseq_Cluster_Interrogation.rds file.
+
+
+### Rename Idents in the cluster (using res 1.6)
+# Res 1.6 was chosen because it gave good separation of clusters without fragmenting clusters that were large and compact
+
+```{r}
+# Use this to return the ident labels and set the ident for future analysis
+Idents(object = seurat_integrated) <- "integrated_snn_res.1.6"
+
+
+# Rename all identities
+seurat_integrated_labeled <- RenameIdents(seurat_integrated, 
+                               "0" = "Capillary EC 1",
+                               "1" = "Microglia 1",
+                               "2" = "Capillary EC 2",
+                               "3" = "Ifngr1+ Microglia",
+                               "4" = "Capillary EC - high mito",
+                               "5" = "Choroid Plexus Cell 1",
+                               "6" = "Microglia 2",
+                               "7" = "IEG+ Microglia",
+                               "8" = "Microglia 3",
+                               "9" = "Capillary EC 3",
+                               "10" = "Pericyte",
+                               "11" = "Arterial EC",
+                               "12" = "IEG+ Capillary EC",
+                               "13" = "Choroid Plexus Cell 2",
+                               "14" = "Arterial SMC",
+                               "15" = "Microglia - high ribo",
+			       "16" = "Choroid Plexus Cell 3",
+			       "17" = "Arterial SMC / Pericyte Doublet", 
+			       "18" = "Astrocyte", 
+			       "19" = "Ependymal Cell", 
+			       "20" = "Choroid Plexus Cell - low sequencing",
+			       "21" = "T Cell",
+			       "22" = "Venous EC",
+			       "23" = "Border Associated Macrophage",
+			       "24" = "Fibroblast",
+			       "25" = "Microglia - high mito",
+			       "26" = "Ccr2+ Monocyte/Macrophage",
+			       "27" = "Reactive Astrocytes",
+			       "28" = "OPC 1",
+			       "29" = "NPY+ Cells",
+			       "30" = "B Cells",
+			       "31" = "OPC 2",
+			       "32" = "Gutamatergic Neuron",
+			       "33" = "Capillary EC 4",
+			       "34" = "GABAergic Neuron",
+			       "35" = "Myelin-Forming Oligodendrocytes"
+			       )
+```
+
+```{r}
+# Remove seurat_integrated from the R environment to clear space in R
+rm(seurat_integrated)
+```
+
+# Plot the UMAP
+
+```{r}
+# Visualize labeled clusters (Clustering with 1st pass cluster labels)
+DimPlot(object = seurat_integrated_labeled, 
+        reduction = "umap")
+
+# Label the UMAP with your cluster names set above and remove the legend
+plot<- DimPlot(object = seurat_integrated_labeled, 
+        reduction = "umap")+
+  NoLegend()
+LabelClusters(plot=plot, id= "ident")
+```
+
+### Subset out poor quality clusters as a 2nd QC method
+# Remove the mt-High groups, ribo-High groups, doublets that can't be defined, isolated nuclei etc...
+
+```{r}
+# Remove poor quality clusters
+seurat_subset_labeled <- subset(seurat_integrated_labeled,
+                               idents = c(
+                                 "Capillary EC - high mito",
+                                 "Microglia - high ribo",
+                                 "Choroid Plexus Cell - low sequencing",
+                                 "Microglia - high mito"),
+                                 invert = TRUE) # invert here will reverse the selection to keep all clusters except those listed
+
+# Add new column to metadata containing the cell type name for each cluster
+seurat_subset_labeled$cell_type <- paste(Idents(seurat_subset_labeled))
+
+
+# Re-visualize clusters (Clustering following removal of poor quality clusters with 1st pass cluster labels)
+DimPlot(object = seurat_subset_labeled, 
+        reduction = "umap")
+
+plot2<- DimPlot(object = seurat_subset_labeled, 
+        reduction = "umap")+
+  NoLegend()
+LabelClusters(plot=plot2, id= "ident")
+```
+
+```{r}
+# Remove seurat_integrated from the R environment to clear space in R
+rm(seurat_integrated_labeled)
+```
+
+# Save the data with the new Idents and removed clusters
+```{r warning=FALSE}
+# Save integrated seurat object
+saveRDS(seurat_subset_labeled, file = 
+          "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/Data_Objects/Seurat4.0_subset_labeled_Josh_8.21.rds")
+```
+
+## Load the labeled data into "seurat_subset_labeled" if already saved to continue with the analysis
+```{r}
+# # Load integrated data
+# seurat_subset_labeled <-readRDS(
+#           "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/Data_Objects/Seurat4.0_subset_labeled_Josh_8.21.rds")
+```
+
+
+## Subset the clusters to create Seurat Objects containing only EC, MG, and Choroid Plexus Cells and ID clusters
+# This will help to determine the identities of the closely associated subclusters
+
+# EC Clusters
+```{r}
+# Create object containing only EC clusters (select clusters to keep - invert = FALSE)
+seurat_EC_subset <- subset(seurat_subset_labeled,
+                               idents = c(
+                                 "Capillary EC 1",
+                                 "Capillary EC 2",
+                                 "Capillary EC 3",
+                                 "Arterial EC",
+                                 "IEG+ Capillary EC",
+                                 "Venous EC",
+                                 "Capillary EC 4"),
+                                 invert = FALSE)
+
+DimPlot(object = seurat_EC_subset, 
+        reduction = "umap")
+```
+
+```{r}
+# Find all sig markers for each cluster compared to all other clusters. Save list to ".csv" file.
+EC_Sig_Markers <- FindAllMarkers(
+  seurat_EC_subset, only.pos = T, min.pct = 0.20, logfc.threshold = 0.25, assay = "RNA")
+
+# Prepare the list of Sig markers
+EC_Sig_Markers_List <- EC_Sig_Markers %>%
+  group_by(cluster) %>%
+  top_n(n = 100, wt = avg_log2FC)
+
+# Export Sig markers to .csv file. Make sure to save file as .xls file!
+write.csv(EC_Sig_Markers_List, file = 
+            "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/Gene_Lists/Seurat4.0_seurat_integrated_EC_Sig_Markers_res1.6_Josh_8.21.csv")
+
+# Stop and assess the genes that make the clusters distinct
+```
+
+```{r}
+# # Can do cluster vs cluster comparisons (optional)
+
+# # Able to put in cluster numbers to the ident.1 and ident.2 functions to compare specific clusters. Able to put in multiple cluster numbers into ident.2 to compare ident.1 against.
+# EC_cluster.markers <- FindMarkers(seurat_EC_subset,
+#                           ident.1 = c(5),
+#                           ident.2 = c(16),
+#             only.pos = TRUE,
+#             #min.diff.pct = 0.25,
+#                      min.pct = 0.20,
+#             logfc.threshold = 0.25)
+# 
+# #Converts rownames to 1st column with the column name as "Gene"
+# EC_cluster.markers <- tibble::rownames_to_column(EC_cluster.markers, "Gene")
+# view(EC_cluster.markers)
+```
+
+```{r}
+# Rename EC clusters & plot
+seurat_EC_subset <- RenameIdents(seurat_EC_subset,
+                                 "Capillary EC 1" = "Capillary EC 1",
+                                 "Capillary EC 2" = "Capillary EC 2",
+                                 "Capillary EC 3" = "Capillary EC 3",
+                                 "Arterial EC" = "Arterial EC",
+                                 "IEG+ Capillary EC" = "IEG+ Capillary EC",
+                                 "Venous EC" = "Venous EC",
+                                 "Capillary EC 4" = "Fenestrated EC")
+
+
+Plot_EC <- DimPlot(object =seurat_EC_subset, 
+        reduction = "umap") + 
+  NoLegend()
+LabelClusters(plot=Plot_EC, id= "ident")
+```
+```{r}
+# Recolor clusters
+
+# Colors must be set in the order of the cluster. Do not assign colors to removed clusters. Do not assign colors to duplicate cluster names.
+Plot_EC_Colored<- DimPlot(object = seurat_EC_subset,
+        reduction = "umap", pt.size = 1, repel = T, label.box = T, cols = c(
+          "cyan",
+          # "magenta",
+          "deepskyblue",
+          # "magenta4",
+          # "orange4",
+          # "maroon2",
+          # "mediumorchid3",
+          # "plum",
+          "lightslateblue",
+          # "limegreen",
+          "darkslateblue",
+          "darkcyan",
+          # "tan1",
+          # "seagreen4",
+          # "sienna1",
+          # "palegreen3",
+          # "olivedrab1",
+          # "darkseagreen2",
+          # "red4",
+          "darkblue",
+          # "firebrick3",
+          # "mediumspringgreen",
+          # "deeppink1",
+          # "yellowgreen",
+          # "grey45",
+          # "darkgreen",
+          # "red",
+          # "grey75",
+          # "gold",
+          "blue"
+          # "orange",
+          # "grey30"
+        ))
+LabelClusters(plot=Plot_EC_Colored, id= "ident", box = T) + NoLegend()
+
+# no labeling
+Plot_EC_Colored + NoLegend()
+```
+
+```{r}
+# save the subsetted EC Seurat
+saveRDS(seurat_EC_subset, file = 
+          "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/Data_Objects/Seurat4.0_EC_subset_labeled_Josh_8.21.rds")
+```
+
+
+# MG Clusters
+```{r}
+# Create object containing only EC clusters (select clusters to keep - invert = FALSE)
+seurat_MG_subset <- subset(seurat_subset_labeled,
+                               idents = c(
+                                 "Microglia 1",
+                                 "Ifngr1+ Microglia",
+                                 "Microglia 2",
+                                 "IEG+ Microglia",
+                                 "Microglia 3"),
+                                 invert = FALSE)
+
+DimPlot(object = seurat_MG_subset, 
+        reduction = "umap")
+```
+
+```{r}
+# Find all sig markers for each cluster compared to all other clusters. Save list to ".csv" file.
+MG_Sig_Markers <- FindAllMarkers(
+  seurat_MG_subset, only.pos = T, min.pct = 0.20, logfc.threshold = 0.25, assay = "RNA")
+
+# Prepare the list of Sig markers
+MG_Sig_Markers_List <- MG_Sig_Markers %>%
+  group_by(cluster) %>%
+  top_n(n = 100, wt = avg_log2FC)
+
+# Export Sig markers to .csv file. Make sure to save file as .xls file!
+write.csv(MG_Sig_Markers_List, file = 
+            "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/Gene_Lists/Seurat4.0_seurat_integrated_MG_Sig_Markers_res1.6_Josh_8.21.csv")
+```
+
+```{r}
+# # Can do cluster vs cluster comparisons (optional)
+
+# # Able to put in cluster numbers to the ident.1 and ident.2 functions to compare specific clusters. Able to put in multiple cluster numbers into ident.2 to compare ident.1 against.
+# MG_cluster.markers <- FindMarkers(seurat_MG_subset,
+#                           ident.1 = c(5),
+#                           ident.2 = c(16),
+#             only.pos = TRUE,
+#             #min.diff.pct = 0.25,
+#                      min.pct = 0.20,
+#             logfc.threshold = 0.25)
+# 
+# #Converts rownames to 1st column with the column name as "Gene"
+# MG_cluster.markers <- tibble::rownames_to_column(MG_cluster.markers, "Gene")
+# view(MG_cluster.markers)
+```
+
+```{r}
+# Rename MG clusters & plot
+seurat_MG_subset <- RenameIdents(seurat_MG_subset,
+                                 "Microglia 1" = "Microglia 1",
+                                 "Ifngr1+ Microglia" = "Homeostatic Microglia",
+                                 "Microglia 2" = "Microglia 2",
+                                 "IEG+ Microglia" = "IEG+ Microglia",
+                                 "Microglia 3" = "Microglia 3")
+
+
+Plot_MG <- DimPlot(object =seurat_MG_subset, 
+        reduction = "umap") + 
+  NoLegend()
+LabelClusters(plot=Plot_MG, id= "ident")
+```
+```{r}
+# Recolor clusters
+
+# Colors must be set in the order of the cluster. Do not assign colors to removed clusters. Do not assign colors to duplicate cluster names.
+Plot_MG_Colored<- DimPlot(object = seurat_MG_subset,
+        reduction = "umap", pt.size = 1, repel = T, label.box = T, cols = c(
+          # "cyan",
+          "magenta",
+          # "deepskyblue",
+          "magenta4",
+          # "orange4",
+          "maroon2",
+          "mediumorchid3",
+          "plum"
+          # "lightslateblue",
+          # "limegreen",
+          # "darkslateblue",
+          # "darkcyan",
+          # "tan1",
+          # "seagreen4",
+          # "sienna1",
+          # "palegreen3",
+          # "olivedrab1",
+          # "darkseagreen2",
+          # "red4",
+          # "darkblue",
+          # "firebrick3",
+          # "mediumspringgreen",
+          # "deeppink1",
+          # "yellowgreen",
+          # "grey45",
+          # "darkgreen",
+          # "red",
+          # "grey75",
+          # "gold",
+          # "blue",
+          # "orange",
+          # "grey30"
+        ))
+LabelClusters(plot=Plot_MG_Colored, id= "ident", box = T) + NoLegend()
+
+# no labeling
+Plot_MG_Colored + NoLegend()
+```
+
+
+```{r}
+# save the EC subsetted Seurat
+saveRDS(seurat_MG_subset, file = 
+          "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/Data_Objects/Seurat4.0_MG_subset_labeled_Josh_8.21.rds")
+```
+
+
+# Choroid Plexus Clusters
+```{r}
+# Create object containing only EC clusters (select clusters to keep - invert = FALSE)
+seurat_ChPlex_subset <- subset(seurat_subset_labeled,
+                               idents = c(
+                                 "Choroid Plexus Cell 1",
+                                 "Choroid Plexus Cell 2",
+                                 "Choroid Plexus Cell 3"),
+                                 invert = FALSE)
+
+DimPlot(object = seurat_ChPlex_subset, 
+        reduction = "umap")
+```
+
+```{r}
+# Find all sig markers for each cluster compared to all other clusters. Save list to ".csv" file.
+ChPlex_Sig_Markers <- FindAllMarkers(
+  seurat_ChPlex_subset, only.pos = T, min.pct = 0.20, logfc.threshold = 0.25, assay = "RNA")
+
+# Prepare the list of Sig markers
+ChPlex_Sig_Markers_List <- ChPlex_Sig_Markers %>%
+  group_by(cluster) %>%
+  top_n(n = 100, wt = avg_log2FC)
+
+# Export Sig markers to .csv file. Make sure to save file as .xls file!
+write.csv(ChPlex_Sig_Markers_List, file = 
+            "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/Gene_Lists/Seurat4.0_seurat_integrated_ChPlex_Sig_Markers_res1.6_Josh_8.21.csv")
+```
+
+```{r}
+# # Can do cluster vs cluster comparisons (optional)
+
+# # Able to put in cluster numbers to the ident.1 and ident.2 functions to compare specific clusters. Able to put in multiple cluster numbers into ident.2 to compare ident.1 against.
+# ChPlex_cluster.markers <- FindMarkers(seurat_ChPlex_subset,
+#                           ident.1 = c(5),
+#                           ident.2 = c(16),
+#             only.pos = TRUE,
+#             #min.diff.pct = 0.25,
+#                      min.pct = 0.20,
+#             logfc.threshold = 0.25)
+# 
+# #Converts rownames to 1st column with the column name as "Gene"
+# ChPlex_cluster.markers <- tibble::rownames_to_column(ChPlex_cluster.markers, "Gene")
+# view(ChPlex_cluster.markers)
+```
+
+```{r}
+# Rename ChPlex clusters & Plot
+seurat_ChPlex_subset <- RenameIdents(seurat_ChPlex_subset,
+                                 "Choroid Plexus Cell 1" = "Choroid Plexus Cell 1",
+                                 "Choroid Plexus Cell 2" = "Choroid Plexus Cell 2",
+                                 "Choroid Plexus Cell 3" = "Choroid Plexus Cell 3")
+
+
+Plot_ChPlex <- Plot_MG <- DimPlot(object =seurat_ChPlex_subset, 
+        reduction = "umap") + 
+  NoLegend()
+LabelClusters(plot=Plot_ChPlex, id= "ident")
+```
+
+```{r}
+# save the ChPlex subsetted Seurat
+saveRDS(seurat_ChPlex_subset, file = 
+          "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/Data_Objects/Seurat4.0_ChPlex_subset_labeled_Josh_8.21.rds")
+```
+
+```{r}
+# Remove seurat_integrated from the R environment to clear space in R
+rm(seurat_EC_subset)
+rm(seurat_MG_subset)
+rm(seurat_ChPlex_subset)
+```
+
+### Rename all clusters following deeper cluster interrogation in whole UMAP & plot
+```{r}
+# Rename full UMAP with updated clusters
+# At this stage Capillary EC 1, 2, and 3 were combined to read Capillary EC and Miroglia 1, 2, and 3 were combined to read Microglia. They can be separated by giving each cluster a unique ident below 
+
+seurat_subset_labeled_full <- RenameIdents(seurat_subset_labeled, 
+                               "Capillary EC 1" = "Capillary EC",
+                               "Microglia 1" = "Microglia",
+                               "Capillary EC 2" = "Capillary EC",
+                               "Ifngr1+ Microglia" = "Homeostatic Microglia",
+                               "Choroid Plexus Cell 1" = "Choroid Plexus Cell",
+                               "Microglia 2" = "Microglia",
+                               "IEG+ Microglia" = "IEG+ Microglia",
+                               "Microglia 3" = "Microglia",
+                               "Capillary EC 3" = "Capillary EC",
+                               "Pericyte" = "Pericyte",
+                               "Arterial EC" = "Arterial EC",
+                               "IEG+ Capillary EC"= "IEG+ Capillary EC",
+                               "Choroid Plexus Cell 2" = "Choroid Plexus Cell",
+                               "Arterial SMC" = "Arterial SMC",
+			       "Choroid Plexus Cell 3" = "Choroid Plexus Cell",
+			       "Arterial SMC / Pericyte Doublet" = "Arterial SMC / Pericyte Doublet", 
+			       "Astrocyte" = "Astrocyte", 
+			       "Ependymal Cell" = "Ependymal Cell",
+			       "T Cell" = "T Cell",
+			       "Venous EC" = "Venous EC",
+			       "Border Associated Macrophage" = "Border Associated Macrophage",
+			       "Fibroblast" = "Fibroblast",
+			       "Ccr2+ Monocyte/Macrophage" = "Ccr2+ Monocyte/Macrophage",
+			       "Reactive Astrocytes" = "Reactive Astrocyte",
+			       "OPC 1" = "OPC 1",
+			       "NPY+ Cells" = "NPY+ Cell",
+			       "B Cells" = "B Cell",
+			       "OPC 2" = "OPC 2",
+			       "Gutamatergic Neuron" = "Glutamatergic Neuron",
+			       "Capillary EC 4" = "Fenestrated EC",
+			       "GABAergic Neuron" ="GABAergic Neuron",
+			       "Myelin-Forming Oligodendrocytes" = "Myelin-Forming Oligodendrocyte"
+			       )
+
+# get the legend
+DimPlot(object = seurat_subset_labeled_full, 
+        reduction = "umap")
+
+# get the labeled plot
+Plot_Full <- DimPlot(object = seurat_subset_labeled_full, 
+        reduction = "umap")+
+  NoLegend()
+LabelClusters(plot=Plot_Full, id= "ident")
+
+#get the naked plot
+Plot_Full
+```
+
+```{r}
+# Remove seurat_integrated from the R environment to clear space in R
+rm(seurat_subset_labeled)
+```
+
+## Generate UMAPs split by condition and sample to visualize QC and Integration
+# Sucessful QC and Integreation will result in overlapping cells between condition and sample
+```{r}
+plot_conditionSplit1 <- DimPlot(seurat_subset_labeled_full, reduction = "umap", group.by = "sample", split.by = "sample")
+plot_conditionSplit1 + ggtitle(NULL)
+plot_conditionSplit2 <- DimPlot(seurat_subset_labeled_full, reduction = "umap", group.by = "sample")
+plot_conditionSplit2 + ggtitle(NULL)
+
+
+plot_sampleSplit1 <- DimPlot(seurat_subset_labeled_full, reduction = "umap", group.by = "sample_number", split.by = "sample_number")
+plot_sampleSplit1 + ggtitle(NULL)
+plot_sampleSplit2 <- DimPlot(seurat_subset_labeled_full, reduction = "umap", group.by = "sample_number")
+plot_sampleSplit2+ ggtitle(NULL)
+```
+
+## SAVE OBJECT BEFORE PROCEEDING TO DE ANALYSIS
+
+save the data with the new Idents and removed clusters
+```{r warning=FALSE}
+# Save integrated seurat object
+saveRDS(seurat_subset_labeled_full, file = 
+          "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/Data_Objects/Seurat4.0_subset_labeled_full_condensed_Josh_1.22.rds")
+```
+
+## RECOLOR the UMAP
+
+```{r}
+# Recolor clusters
+
+# Colors must be set in the order of the cluster. Do not assign colors to removed clusters. Do not assign colors to duplicate cluster names.
+Plot_Full_Colored<- DimPlot(object = seurat_subset_labeled_full,
+        reduction = "umap", pt.size = 1, repel = T, label.box = T, cols = c(
+          "cyan",
+          "magenta",
+          # "deepskyblue",
+          "magenta4",
+          "orange4",
+          # "maroon2",
+          "mediumorchid3",
+          # "plum",
+          # "lightslateblue",
+          "limegreen",
+          "darkslateblue",
+          "darkcyan",
+          # "tan1",
+          "seagreen4",
+          # "sienna1",
+          "palegreen3",
+          "olivedrab1",
+          "darkseagreen2",
+          "red4",
+          "darkblue",
+          "firebrick3",
+          "mediumspringgreen",
+          "deeppink1",
+          "yellowgreen",
+          "grey45",
+          "darkgreen",
+          "red",
+          "grey75",
+          "gold",
+          "blue",
+          "orange",
+          "grey30"
+        ))
+LabelClusters(plot=Plot_Full_Colored, id= "ident", box = T) + NoLegend()
+
+# no labeling
+Plot_Full_Colored + NoLegend()
+```
+
+
+### Extract FINAL Sig genes for each cluster
+
+```{r}
+All_Sig_Markers <- FindAllMarkers(
+  seurat_subset_labeled_full, only.pos = T, min.pct = 0.20, logfc.threshold = 0.25, assay = "RNA")
+
+# Prepare the list of Sig markers
+All_Sig_Markers_List <- All_Sig_Markers %>%
+  group_by(cluster) %>%
+  top_n(n = 100, wt = avg_log2FC)
+
+# Export Sig markers to .csv file. Make sure to save file as .xls file!
+write.csv(All_Sig_Markers_List, file = 
+            "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/Gene_Lists/Seurat4.0_seurat_integrated_Sig_Markers_res1.6_condensed_FINAL_Josh_1.22.csv")
+```
+

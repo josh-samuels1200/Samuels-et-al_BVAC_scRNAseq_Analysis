@@ -1,0 +1,361 @@
+---
+title: "Mouse Neurovascular scRNAseq: QC & Integration"
+author: "Joshua Samuels"
+date: "04/14/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+This document follows a pipeline process used by Harvard Chan Bioinformatic Core (https://github.com/hbctraining/scRNA-seq/tree/master/lessons).
+
+Notes: Running Seurat 4.0
+
+### Load Libraries
+
+```{r, message=FALSE, warning=FALSE}
+# Load libraries
+library(SingleCellExperiment)
+library(Seurat)
+library(tidyverse)
+library(Matrix)
+library(scales)
+library(cowplot)
+library(RCurl)
+library(ggridges)
+```
+
+### Create Seurat Objects
+
+```{r}
+# Create each individual Seurat object for every sample
+for (file in c("ML01_CD31_CSD",
+               "ML02_CD31_HC",
+               "ML05_CD31_CSD",
+               "ML06_CD31_HC")){
+        seurat_data <- Read10X(data.dir = paste0("C:/Users/samuelsjd/Desktop/R_Data/10X_Genomics_CD31_DROPseq/", file))
+        seurat_obj <- CreateSeuratObject(counts = seurat_data, 
+                                         min.features = 100, 
+                                         project = file)
+        assign(file, seurat_obj)
+}
+```
+
+### Merge
+
+```{r}
+# merge the individual Seurat objects into 1 object 
+merged_seurat <- merge(x = ML01_CD31_CSD,
+                       y = c(ML02_CD31_HC, ML05_CD31_CSD, ML06_CD31_HC),
+                       add.cell.id=c("CSD01", "HC02", "CSD05", "HC06"))
+table(merged_seurat$orig.ident)
+# Check that the merged object has the appropriate sample-specific prefixes
+head(merged_seurat@meta.data)
+tail(merged_seurat@meta.data)
+```
+
+### Acquire the Metrics for Quality Control
+
+```{r}
+# Add number of genes per UMI for each cell to metadata
+merged_seurat$log10GenesPerUMI <- log10(merged_seurat$nFeature_RNA) / log10(merged_seurat$nCount_RNA)
+# Compute percent mito ratio
+merged_seurat$mitoRatio <- PercentageFeatureSet(object = merged_seurat, pattern = "^mt-")
+merged_seurat$mitoRatio <- merged_seurat@meta.data$mitoRatio / 100
+
+# Create metadata dataframe
+metadata <- merged_seurat@meta.data
+
+# Add cell IDs to metadata
+metadata$cells <- rownames(metadata)
+
+# Rename columns
+metadata <- metadata %>%
+        dplyr::rename(seq_folder = orig.ident,
+                      nUMI = nCount_RNA,
+                      nGene = nFeature_RNA)
+#sample names for each of the cells based on the cell prefix:
+
+# Create sample column
+metadata$sample <- NA
+metadata$sample[which(str_detect(metadata$cells, "^HC"))] <- "HC"
+metadata$sample[which(str_detect(metadata$cells, "^CSD"))] <- "SD"
+
+#Create sample number column
+metadata$sample_number <-NA
+metadata$sample_number[which(str_detect(metadata$cells, "^HC06"))] <- "HC06"
+metadata$sample_number[which(str_detect(metadata$cells, "^CSD01"))] <- "SD01"
+metadata$sample_number[which(str_detect(metadata$cells, "^CSD05"))] <- "SD05"
+metadata$sample_number[which(str_detect(metadata$cells, "^HC02"))] <- "HC02"
+
+
+# Add metadata back to Seurat object
+merged_seurat@meta.data <- metadata
+
+head(merged_seurat@meta.data)
+tail(merged_seurat@meta.data)
+```
+
+### Save the seurat object
+```{r}
+# Create .RData object to load at any time
+save(merged_seurat, file="C:/Users/samuelsjd/Desktop/R_Data/10X_Genomics_CD31_DROPseq/Merged_Seurat_Objects/Seurat_4.0_Merged_Data/merged_seurat_4.15.21.rds")
+```
+
+### Assess quality
+# We will assess various metrics and then decide on which cells are low quality and should be removed from the analysis
+```{r,fig.show="hold",out.width="25%"}
+# Visualize the number of cell counts per sample
+metadata %>% 
+  	ggplot(aes(x=sample_number, fill=sample)) + 
+  	geom_bar() +
+  	theme_classic() +
+  	theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
+  	theme(plot.title = element_text(hjust=0.5, face="bold")) +
+  	ggtitle("NCells")
+
+# Visualize the number UMIs (transcripts) per cell
+metadata %>% 
+  	ggplot(aes(color=sample_number, x=nUMI, fill= sample)) + 
+  	geom_density(alpha = 0.2) + 
+  	scale_x_log10() + 
+  	theme_classic() +
+  	ylab("Cell density") +
+  	geom_vline(xintercept = 500)
+
+# Visualize the distribution of genes detected per cell via histogram
+metadata %>% 
+  	ggplot(aes(color=sample, x=nGene, fill= sample_number)) + 
+  	geom_density(alpha = 0.2) + 
+  	theme_classic() +
+  	scale_x_log10() + 
+  	geom_vline(xintercept = 300)
+
+# Visualize the distribution of genes detected per cell via boxplot
+metadata %>% 
+  	ggplot(aes(x=sample, y=log10(nGene), fill=sample_number)) + 
+  	geom_boxplot() + 
+  	theme_classic() +
+  	theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
+  	theme(plot.title = element_text(hjust=0.5, face="bold")) +
+  	ggtitle("NCells vs NGenes")
+
+# Visualize the correlation between genes detected and number of UMIs and determine whether strong presence of cells with low numbers of genes/UMIs
+metadata %>% 
+  	ggplot(aes(x=nUMI, y=nGene, color=mitoRatio)) + 
+  	geom_point() + 
+	scale_colour_gradient(low = "gray90", high = "black") +
+  	stat_smooth(method=lm) +
+  	scale_x_log10() + 
+  	scale_y_log10() + 
+  	theme_classic() +
+  	geom_vline(xintercept = 500) +
+  	geom_hline(yintercept = 250) +
+  	facet_wrap(~sample_number)
+
+# Visualize the distribution of mitochondrial gene expression detected per cell
+metadata %>% 
+  	ggplot(aes(color=sample, x=mitoRatio, fill=sample_number)) + 
+  	geom_density(alpha = 0.2) + 
+  	scale_x_log10() + 
+  	theme_classic() +
+  	geom_vline(xintercept = 0.2)
+
+# Visualize the overall complexity of the gene expression by visualizing the genes detected per UMI
+metadata %>%
+  	ggplot(aes(x=log10GenesPerUMI, color = sample, fill=sample_number)) +
+  	geom_density(alpha = 0.2) +
+  	theme_classic() +
+  	geom_vline(xintercept = 0.8)
+```
+
+### Filter cells accordingly 
+```{r}
+# Filter out low quality reads using selected thresholds
+filtered_seurat <- subset(x = merged_seurat, 
+                         subset= (nUMI >= 500) & 
+                           (nGene >= 250) & 
+                           (log10GenesPerUMI > 0.80) & 
+                           (mitoRatio < 0.25))
+```
+
+### Utilize a gene level filter
+Within our data we will have many genes with zero counts. These genes can dramatically reduce the average expression for a cell and so we will remove them from our data. First we will remove genes that have zero expression in all cells. Additionally, we will perform some filtering by prevalence. If a gene is only expressed in a handful of cells, it is not particularly meaningful as it still brings down the averages for all other cells it is not expressed in. For our data we choose to keep only genes which are expressed in 10 or more cells.
+```{r}
+# Output a logical vector for every gene on whether the more than zero counts per cell
+# Extract counts
+counts <- GetAssayData(object = filtered_seurat, slot = "counts")
+
+# Output a logical vector for every gene on whether the more than zero counts per cell
+nonzero <- counts > 0
+
+# Sums all TRUE values and returns TRUE if more than 10 TRUE values per gene
+keep_genes <- Matrix::rowSums(nonzero) >= 10
+
+# Only keeping those genes expressed in more than 10 cells
+filtered_counts <- counts[keep_genes, ]
+
+# Reassign to filtered Seurat object
+filtered_seurat <- CreateSeuratObject(filtered_counts, meta.data = filtered_seurat@meta.data)
+```
+
+### Reassess QC metrics
+```{r, figures-side,fig.show="hold",out.width="25%"}
+# Create metadata dataframe
+filtered_metadata <- filtered_seurat@meta.data
+
+# Visualize the number of cell counts per sample
+filtered_metadata %>% 
+  	ggplot(aes(x=sample_number, fill=sample)) + 
+  	geom_bar() +
+  	theme_classic() +
+  	theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
+  	theme(plot.title = element_text(hjust=0.5, face="bold")) +
+  	ggtitle("NCells")
+
+# Visualize the number UMIs/transcripts per cell
+filtered_metadata  %>% 
+  	ggplot(aes(y=sample_number, x=nUMI, fill=sample_number)) + 
+  	geom_density_ridges(alpha = 0.2) + 
+  	scale_x_log10() + 
+  	theme_ridges() +
+  	ylab("Cell density") +
+  	geom_vline(xintercept = 500)
+
+# Visualize the distribution of genes detected per cell via histogram
+filtered_metadata  %>% 
+  	ggplot(aes(y=sample_number, x=nGene, fill= sample_number)) + 
+  	geom_density_ridges(alpha = 0.2) + 
+  	theme_ridges() +
+  	scale_x_log10() + 
+  	geom_vline(xintercept = 300)
+
+# Visualize the distribution of genes detected per cell via boxplot
+filtered_metadata  %>% 
+  	ggplot(aes(x=sample, y=log10(nGene), fill=sample_number)) + 
+  	geom_boxplot() + 
+  	theme_classic() +
+  	theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
+  	theme(plot.title = element_text(hjust=0.5, face="bold")) +
+  	ggtitle("NCells vs NGenes")
+
+# Visualize the correlation between genes detected and number of UMIs and determine whether strong presence of cells with low numbers of genes/UMIs
+filtered_metadata  %>% 
+  	ggplot(aes(x=nUMI, y=nGene, color=mitoRatio)) + 
+  	geom_point() + 
+	scale_colour_gradient(low = "gray90", high = "black") +
+  	stat_smooth(method=lm) +
+  	scale_x_log10() + 
+  	scale_y_log10() + 
+  	theme_classic() +
+  	geom_vline(xintercept = 500) +
+  	geom_hline(yintercept = 250) +
+  	facet_wrap(~sample_number)
+
+# Visualize the distribution of mitochondrial gene expression detected per cell
+filtered_metadata  %>% 
+  	ggplot(aes(y=sample_number, x=mitoRatio, fill=sample_number)) + 
+  	geom_density_ridges(alpha = 0.2) + 
+  	scale_x_log10() + 
+  	theme_ridges() +
+  	geom_vline(xintercept = 0.2)
+
+# Visualize the overall complexity of the gene expression by visualizing the genes detected per UMI
+filtered_metadata  %>%
+  	ggplot(aes(x=log10GenesPerUMI, y = sample_number, fill=sample_number)) +
+  	geom_density_ridges(alpha = 0.2) +
+  	theme_ridges() +
+  	geom_vline(xintercept = 0.8)
+```
+
+### Save the filtered seurat object
+```{r}
+# Create .RData object to load at any time
+saveRDS(filtered_seurat, file="C:/Users/samuelsjd/Desktop/R_Data/10X_Genomics_CD31_DROPseq/Merged_Seurat_Objects/Seurat_4.0_Merged_Data/filtered_seurat_4.15.21.rds")
+```
+
+## Normalization
+```{r}
+## Optional normalization methods
+
+## Normalize the counts
+#seurat_phase <- NormalizeData(filtered_seurat)
+
+## Score cells for cell cycle (features come from cell_cycle_genes_AnnotationHub.rmd)
+#seurat_phase <- CellCycleScoring(seurat_phase, 
+                                 #g2m.features = g2m_genes, 
+                                 #s.features = s_genes)
+
+## View cell cycle scores and phases assigned to cells                                 
+#View(seurat_phase@meta.data)
+```
+
+```{r}
+# Normalization conducted using the most variable genes followed by scaling
+
+# Identify the most variable genes
+seurat_phase <- FindVariableFeatures(filtered_seurat, 
+                     selection.method = "vst",
+                     nfeatures = 2000, 
+                     verbose = FALSE)
+		     
+# Scale the counts
+seurat_phase <- ScaleData(seurat_phase)
+# Perform PCA
+seurat_phase <- RunPCA(seurat_phase)
+
+# Plot the PCA colored by cell cycle phase
+#DimPlot(seurat_phase,
+        #reduction = "pca",
+       # group.by= "Phase",
+       # split.by = "Phase")
+```
+# Wait and perform the clustering without regression and see if we have clusters separated by cell cycle phase. If we do, then we could come back and perform the regression (optional)
+
+### SCTransform
+```{r}
+# set computer system accordingly
+options(future.globals.maxSize = 4000 * 1024^2)
+```
+
+```{r message=FALSE, warning=FALSE}
+# Split seurat object by condition to perform cell cycle scoring and SCT on all samples
+split_seurat <- SplitObject(filtered_seurat, split.by = "sample_number")
+
+split_seurat <- split_seurat[c("SD05", "SD01", "HC02", "HC06")]
+
+## below is optional
+# for (i in 1:length(split_seurat)) {
+# split_seurat[[i]] <- NormalizeData(split_seurat[[i]], verbose = TRUE)
+#  split_seurat[[i]] <- CellCycleScoring(split_seurat[[i]], g2m.features=g2m_genes, s.features=s_genes)
+#  split_seurat[[i]] <- SCTransform(split_seurat[[i]], vars.to.regress = c("mitoRatio"))
+# }
+```
+
+### Integration
+
+```{r message=FALSE, warning=FALSE}
+# Select the most variable features to use for integration
+integ_features <- SelectIntegrationFeatures(object.list = split_seurat, 
+                                            nfeatures = 3000) 
+
+# Prepare the SCT list object for integration
+split_seurat <- PrepSCTIntegration(object.list = split_seurat, 
+                                   anchor.features = integ_features)
+
+# Find best buddies - can take a while to run
+integ_anchors <- FindIntegrationAnchors(object.list = split_seurat, 
+                                        normalization.method = "SCT", 
+                                        anchor.features = integ_features)
+```
+
+```{r}
+options(future.globals.maxSize = 4000 * 1024^5)
+# Integrate across conditions
+seurat_integrated <- IntegrateData(anchorset = integ_anchors, 
+                                   normalization.method = "SCT")
+```
+
+```{r}
+# Save integrated seurat object
+saveRDS(seurat_integrated, file="C:/Users/samuelsjd/Desktop/R_Data/10X_Genomics_CD31_DROPseq/Merged_Seurat_Objects/Seurat_4.0_Merged_Data/seurat_integrated_4.15.21.rds")
+```

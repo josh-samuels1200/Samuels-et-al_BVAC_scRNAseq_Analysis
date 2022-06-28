@@ -1,0 +1,438 @@
+---
+title: "Mouse Neurovascular scRNAseq: DE Gene Pathway Enrichment Analysis"
+author: "Joshua Samuels"
+date: "1/4/2022"
+output: html_document
+---
+
+Pathway enrichment analysis for DE genes in each cluster performed with Reactome and GO: Biological Process. Analysis data downloaded as CSV file and loaded into R.
+Reactome settings: Project to Human = YES, Include Interactors = NO.
+
+
+### Load Libraries
+
+```{r message=FALSE, warning=FALSE}
+# Load libraries
+library(SingleCellExperiment)
+library(Seurat)
+library(tidyverse)
+library(Matrix)
+library(scales)
+library(cowplot)
+library(RCurl)
+library(BiocManager)
+library(ggplot2)
+library(dplyr)
+library(magrittr)
+library(patchwork)
+library(ggraph)
+library(clustree)
+library(reshape2)
+```
+
+
+### Pathway Analysis with a Matrix View
+# The full lists of significant (FDR < 0.05) Reactome and GO: BP pathways were focused to key pathways of interest. To do this, create a .csv file for each cell type of interest (one for UPregulated pathways and one for DOWNregulated pathways) with the follwing headers: Term_ID, Term_Name, and FDR. Save these as .csv files and use the following code to read the lists into R, manupulate them, and generate ordered pathway analysis heatmaps.
+
+```{r}
+# Up Regulated Data Lists
+fp1 <- "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/DE_Analysis/Go_Reactome_Focused_Analysis/Cap_EC_Up.csv"
+fp2 <- "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/DE_Analysis/Go_Reactome_Focused_Analysis/Arterial_EC_Up.csv"
+fp3 <- "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/DE_Analysis/Go_Reactome_Focused_Analysis/ChPlex_Up.csv"
+fp4 <- "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/DE_Analysis/Go_Reactome_Focused_Analysis/HomeoMG_Up.csv"
+fp5 <- "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/DE_Analysis/Go_Reactome_Focused_Analysis/MG_Up.csv"
+fp6 <- "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/DE_Analysis/Go_Reactome_Focused_Analysis/Venous_EC_Up.csv"
+fp7 <- "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/DE_Analysis/Go_Reactome_Focused_Analysis/aSMC_Up.csv"
+
+
+# Down Regulated Data Lists
+fp8 <- "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/DE_Analysis/Go_Reactome_Focused_Analysis/Arterial_EC_Down.csv"
+fp9 <- "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/DE_Analysis/Go_Reactome_Focused_Analysis/ChPlex_Down.csv"
+fp10 <- "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/DE_Analysis/Go_Reactome_Focused_Analysis/HomeoMG_Down.csv"
+fp11 <- "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/DE_Analysis/Go_Reactome_Focused_Analysis/MG_Down.csv"
+fp12 <- "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/DE_Analysis/Go_Reactome_Focused_Analysis/Fibro_Down.csv"
+# fp13 <- "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/DE_Analysis/Go_Reactome_Focused_Analysis/Cap_EC_Down.csv"
+
+
+CapECUp <- read.csv(file = fp1) # read the lsit into R and create the object 
+CapECUp <- CapECUp %>%
+  unite("Term", Term_ID:Term_Name, sep = "_") # combine the Term_ID and Term_Name columns
+rownames(CapECUp) <- CapECUp[,1] # make the 1st column the rownames of the object
+CapECUp <- subset(CapECUp, select = FDR) # keep only the FDR column
+CapECUp <- rename(CapECUp,
+                  Capillary_EC = FDR) # rename the FDR column the name of the cell type
+CapECUp <- t(CapECUp) # transpose the data object
+CapECUp <- as.data.frame(CapECUp) # convert the object to a data frame
+CapECUp <- tibble::rownames_to_column(CapECUp, "CellType") # make the rowname into the 1st column with "CellType" as the column name
+
+aECUP <- read.csv(file = fp2)
+aECUP <- aECUP %>%
+  unite("Term", Term_ID:Term_Name, sep = "_")
+rownames(aECUP) <- aECUP[,1]
+aECUP <- subset(aECUP, select = FDR)
+aECUP <- rename(aECUP,
+                  Arterial_EC = FDR)
+aECUP <- t(aECUP)
+aECUP <- as.data.frame(aECUP)
+aECUP <- tibble::rownames_to_column(aECUP, "CellType")
+
+ChPlexUP <- read.csv(file = fp3)
+ChPlexUP <- ChPlexUP %>%
+  unite("Term", Term_ID:Term_Name, sep = "_")
+rownames(ChPlexUP) <- ChPlexUP[,1]
+ChPlexUP <- subset(ChPlexUP, select = FDR)
+ChPlexUP <- rename(ChPlexUP,
+                  Choroid_Plexus = FDR)
+ChPlexUP <- t(ChPlexUP)
+ChPlexUP <- as.data.frame(ChPlexUP)
+ChPlexUP <- tibble::rownames_to_column(ChPlexUP, "CellType")
+
+HomeoMGUP <- read.csv(file = fp4)
+HomeoMGUP <- HomeoMGUP %>%
+  unite("Term", Term_ID:Term_Name, sep = "_")
+rownames(HomeoMGUP) <- HomeoMGUP[,1]
+HomeoMGUP <- subset(HomeoMGUP, select = FDR)
+HomeoMGUP <- rename(HomeoMGUP,
+                  Homeostatic_Microglia = FDR)
+HomeoMGUP <- t(HomeoMGUP)
+HomeoMGUP <- as.data.frame(HomeoMGUP)
+HomeoMGUP <- tibble::rownames_to_column(HomeoMGUP, "CellType")
+
+MGUp <- read.csv(file = fp5)
+MGUp <- MGUp %>%
+  unite("Term", Term_ID:Term_Name, sep = "_")
+rownames(MGUp) <- MGUp[,1]
+MGUp <- subset(MGUp, select = FDR)
+MGUp <- rename(MGUp,
+                  Microglia = FDR)
+MGUp <- t(MGUp)
+MGUp <- as.data.frame(MGUp)
+MGUp <- tibble::rownames_to_column(MGUp, "CellType")
+
+vECUp <- read.csv(file = fp6)
+vECUp <- vECUp %>%
+  unite("Term", Term_ID:Term_Name, sep = "_")
+rownames(vECUp) <- vECUp[,1]
+vECUp <- subset(vECUp, select = FDR)
+vECUp <- rename(vECUp,
+                  Venous_EC = FDR)
+vECUp <- t(vECUp)
+vECUp <- as.data.frame(vECUp)
+vECUp <- tibble::rownames_to_column(vECUp, "CellType")
+
+aSMCUp <- read.csv(file = fp7)
+aSMCUp <- aSMCUp %>%
+  unite("Term", Term_ID:Term_Name, sep = "_")
+rownames(aSMCUp) <- aSMCUp[,1]
+aSMCUp <- subset(aSMCUp, select = FDR)
+aSMCUp <- rename(aSMCUp,
+                  Arterial_SMC = FDR)
+aSMCUp <- t(aSMCUp)
+aSMCUp <- as.data.frame(aSMCUp)
+aSMCUp <- tibble::rownames_to_column(aSMCUp, "CellType")
+
+
+# Down
+aECDown <- read.csv(file = fp8)
+aECDown <- aECDown %>%
+  unite("Term", Term_ID:Term_Name, sep = "_")
+rownames(aECDown) <- aECDown[,1]
+aECDown <- subset(aECDown, select = FDR)
+aECDown <- rename(aECDown,
+                  Arterial_EC = FDR)
+aECDown <- t(aECDown)
+aECDown <- as.data.frame(aECDown)
+aECDown <- tibble::rownames_to_column(aECDown, "CellType")
+
+ChPlexDown <- read.csv(file = fp9)
+ChPlexDown <- ChPlexDown %>%
+  unite("Term", Term_ID:Term_Name, sep = "_")
+rownames(ChPlexDown) <- ChPlexDown[,1]
+ChPlexDown <- subset(ChPlexDown, select = FDR)
+ChPlexDown <- rename(ChPlexDown,
+                  Choroid_Plexus = FDR)
+ChPlexDown <- t(ChPlexDown)
+ChPlexDown <- as.data.frame(ChPlexDown)
+ChPlexDown <- tibble::rownames_to_column(ChPlexDown, "CellType")
+
+HomeoMGDown <- read.csv(file = fp10)
+HomeoMGDown <- HomeoMGDown %>%
+  unite("Term", Term_ID:Term_Name, sep = "_")
+rownames(HomeoMGDown) <- HomeoMGDown[,1]
+HomeoMGDown <- subset(HomeoMGDown, select = FDR)
+HomeoMGDown <- rename(HomeoMGDown,
+                  Homeostatic_Microglia = FDR)
+HomeoMGDown <- t(HomeoMGDown)
+HomeoMGDown <- as.data.frame(HomeoMGDown)
+HomeoMGDown <- tibble::rownames_to_column(HomeoMGDown, "CellType")
+
+MGDown <- read.csv(file = fp11)
+MGDown <- MGDown %>%
+  unite("Term", Term_ID:Term_Name, sep = "_")
+rownames(MGDown) <- MGDown[,1]
+MGDown <- subset(MGDown, select = FDR)
+MGDown <- rename(MGDown,
+                  Microglia = FDR)
+MGDown <- t(MGDown)
+MGDown <- as.data.frame(MGDown)
+MGDown <- tibble::rownames_to_column(MGDown, "CellType")
+
+FibroDown <- read.csv(file = fp12)
+FibroDown <- FibroDown %>%
+  unite("Term", Term_ID:Term_Name, sep = "_")
+rownames(FibroDown) <- FibroDown[,1]
+FibroDown <- subset(FibroDown, select = FDR)
+FibroDown <- rename(FibroDown,
+                  Fibroblast = FDR)
+FibroDown <- t(FibroDown)
+FibroDown <- as.data.frame(FibroDown)
+FibroDown <- tibble::rownames_to_column(FibroDown, "CellType")
+
+# CapECDown <- read.csv(file = fp13)
+# CapECDown <- CapECDown %>%
+#   unite("Term", Term_ID:CapECDown, sep = "_")
+# rownames(CapECDown) <- CapECDown[,1]
+# CapECDown <- subset(CapECDown, select = FDR)
+# CapECDown <- rename(CapECDown,
+#                   Capilary_EC = FDR)
+# CapECDown <- t(CapECDown)
+# CapECDown <- as.data.frame(CapECDown)
+# CapECDown <- tibble::rownames_to_column(CapECDown, "CellType")
+ 
+CapECDown <- aECDown # needed a workaround for this cell type, for some reason the above code did not work for this group. This gives the same result.
+ CapECDown[1, 2] <- 0.001078907
+ CapECDown[1, 1] <- "Capillary_EC"
+
+
+# Label manipulation prior to merging
+# Here, we are renaming term names that are basically the same, removing terms that we are not interested in, and abbreviating long term names
+aSMCUp <- rename(aSMCUp, 
+                 "R-HSA-9613829_Chaperone Mediated Autophagy" = "R-HSA-9612973_Chaperone Mediated Autophagy",
+                 "R-HSA-3371511_HSF1 activation" = "R-HSA-3371556_HSF1 activation"
+                 )
+
+vECUp$`R-HSA-449147: Signaling by Interleukins` <- NULL
+
+ChPlexUP <- rename(ChPlexUP,
+                   "R-HSA-3371511_HSF1 activation" = "R-HSA-3371571_HSF1 activation"
+                   )
+
+MGUp <- rename(MGUp,
+               "GO:1904706_Neg reg of SMC proliferation" = "GO:1904706_Negative regulation of vascular associated smooth muscle cell proliferation")
+
+CapECUp <- rename(CapECUp,
+                  "R-HSA-3371511_HSF1 activation" = "R-HSA-3371453_HSF1 activation")
+
+aECUP <- rename(aECUP,
+                "R-HSA-3371511_HSF1 activation" = "R-HSA-3371453_HSF1 activation")
+```
+
+```{r}
+# Merge data sets
+
+# Up
+PA.Up <- Reduce(function(x, y) merge(x, y, all = T), list(
+  CapECUp,
+  aECUP, 
+  ChPlexUP, 
+  HomeoMGUP, 
+  MGUp, 
+  vECUp, 
+  aSMCUp)) # merge all lists and keep all unique values
+
+# Further label manipulation post-merging
+PA.Up <- rename(PA.Up,
+                "R-HSA-3371497_HSP90 chaperone cycle for SHR" = "R-HSA-3371497_HSP90 chaperone cycle for steroid hormone receptors (SHR) in the presence of ligand"
+                )
+
+PA.Up$`GO:1903748_Negative regulation of establishment of protein localization to mitochondrion` <- NULL
+
+
+# Down
+PA.Down <- Reduce(function(x, y) merge(x, y, all = T), list(
+  aECDown, 
+  ChPlexDown, 
+  HomeoMGDown, 
+  MGDown, 
+  FibroDown,
+  CapECDown)) # merge all lists and keep all unique values
+```
+
+```{r}
+# Create heatmap
+
+# Up
+melt_PA.Up <- melt(PA.Up, id.vars = "CellType", variable.name = "Term", value.name = "FDR") # create long data
+
+Up.OrderedCellTypes <- c( # create specific cell type order that will be used to order the cell types on the X axis
+  "Capillary_EC",
+  "Arterial_EC",
+  "Venous_EC",
+  "Microglia",
+  "Homeostatic_Microglia",
+  "Arterial_SMC",
+  "Choroid_Plexus"
+)
+
+# create alphabetized term order so all terms from the same source are together on the Y axis. Important if terms are drawn from multiple sources
+up.term.order <- t(PA.Up) # transpose 
+up.term.order <- as.data.frame(up.term.order) # convert to data frame
+up.term.order <- rownames_to_column(up.term.order, "X") # convert rownames to 1st column with "X" as the column title
+up.term.order <- subset(up.term.order, select = X) # keep only column X 
+up.term.order <- up.term.order[-1,] # remove the 1st column
+up.term.order <- str_sort(up.term.order) # sort the object 
+
+# Remove identifiers from melt_PA.Up & up.term.order
+melt_PA.Up[c("1", "2")] <- str_split_fixed(melt_PA.Up$Term, "_", 2) # split Term column at the "_"
+melt_PA.Up$Term <- NULL # remove the "Term" column
+melt_PA.Up$"1" <- NULL # remove the "1" column
+melt_PA.Up <- rename(melt_PA.Up,
+                     Term = "2") # rename the "2" column back to "Term" - this will no longer have the term IDs attached
+
+up.term.order <- as.data.frame(up.term.order) # convert to data frame
+up.term.order[c("1", "2")] <- str_split_fixed(up.term.order$up.term.order, "_", 2) # split up.term.order column at the "_"
+up.term.order$up.term.order <- NULL # remove the "up.term.order" column
+up.term.order$"1" <- NULL # remove the "1" column
+up.term.order <- rename(up.term.order,
+                        x = "2")  # rename the "2" column back to "x" - this will no longer have the term IDs attached
+up.term.order <- as.matrix(up.term.order) # convert the object to a matrix
+up.term.order <- as.character(up.term.order) # conver the object to a character
+
+# Create the upregulated pathways plot using your ordered cell types and alphabetized terms
+Up.ggplothmap <- ggplot(melt_PA.Up, aes(x = fct_relevel(CellType, Up.OrderedCellTypes), y = fct_relevel(Term, up.term.order), fill = FDR)) + 
+  geom_tile(color = "black") +
+  scale_fill_gradientn(colors = topo.colors(5),na.value = "white",limits = c(0, 0.05), breaks = c(0.01, 0.02, 0.03, 0.04, 0.05), label = c(0.01, 0.02, 0.03, 0.04, 0.05)) +
+  xlab("") + 
+  ylab("") +
+  theme(axis.text.x = element_text(size = 8, angle = 90, hjust = 0.95, vjust = 0.2), axis.text.y = element_text(size = 8, hjust = 1), axis.ticks = element_blank(), panel.background = element_blank()) + 
+  scale_x_discrete(expand=c(0,0))
+Up.ggplothmap
+
+
+# Down
+melt_PA.Down <- melt(PA.Down, id.vars = "CellType", variable.name = "Term", value.name = "FDR") # create long data
+
+Down.OrderedCellTypes <- c( # create specific cell type order
+  "Capillary_EC",
+  "Arterial_EC",
+  "Microglia",
+  "Homeostatic_Microglia",
+  "Choroid_Plexus",
+  "Fibroblast"
+)
+
+down.term.order <- t(PA.Down) # create alphabetized term order
+down.term.order <- as.data.frame(down.term.order)
+down.term.order <- rownames_to_column(down.term.order, "X")
+down.term.order <- subset(down.term.order, select = X)
+down.term.order <- down.term.order[-1,]
+down.term.order <- str_sort(down.term.order)
+
+# Remove identifiers from melt_PA.Up & up.term.order
+melt_PA.Down[c("1", "2")] <- str_split_fixed(melt_PA.Down$Term, "_", 2)
+melt_PA.Down$Term <- NULL
+melt_PA.Down$"1" <- NULL
+melt_PA.Down <- rename(melt_PA.Down,
+                     Term = "2")
+
+down.term.order <- as.data.frame(down.term.order)
+down.term.order[c("1", "2")] <- str_split_fixed(down.term.order$down.term.order, "_", 2)
+down.term.order$down.term.order <- NULL
+down.term.order$"1" <- NULL
+down.term.order <- rename(down.term.order,
+                        x = "2")
+down.term.order <- as.matrix(down.term.order)
+down.term.order <- as.character(down.term.order)
+
+# Create the downregulated pathways plot using your ordered cell types and alphabetized terms
+Down.ggplothmap <- ggplot(melt_PA.Down, aes(x = fct_relevel(CellType, Down.OrderedCellTypes), y = fct_relevel(Term, down.term.order), fill = FDR)) + 
+  geom_tile(color = "black") +
+  scale_fill_gradientn(colors = topo.colors(5),na.value = "white", limits = c(0, 0.05), breaks = c(0.01, 0.02, 0.03, 0.04, 0.05), label = c(0.01, 0.02, 0.03, 0.04, 0.05)) +
+  xlab("") + 
+  ylab("") +
+  theme(axis.text.x = element_text(size = 8, angle = 90, hjust = 0.95, vjust = 0.2), axis.text.y = element_text(size = 8, hjust = 1), axis.ticks = element_blank(), panel.background = element_blank()) + 
+  scale_x_discrete(expand=c(0,0))
+Down.ggplothmap
+```
+
+# Code below not used...
+
+<!-- ### Load Reactome Data -->
+<!-- ```{r} -->
+<!-- # Load Analysis from Reactome -->
+<!-- Load_File_Path <- -->
+<!--   "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/DE_Analysis/Reactome/Condensed/Choroid_Plexus_CSDvsHC_Downregulated.csv" -->
+<!-- ReactomeData <- read.csv(file = Load_File_Path) -->
+
+<!-- # set later plot attributes and save names to correspond with cell type UP/DOWN -->
+<!-- # title for pathway enrichment plots -->
+<!-- title <- "Choroid Plexus: Downregulated" -->
+
+<!-- # save names for plots -->
+<!-- GenePlotName <- "Choroid_Plexus_DOWN_PEA_Gene_Ratio.jpeg" -->
+<!-- ReactionPlotName <- "Choroid_Plexus_DOWN_PEA_Reaction_Ratio.jpeg" -->
+<!-- ``` -->
+
+<!-- ### Clean Up Data -->
+<!-- ```{r} -->
+<!-- # Rename columns -->
+<!-- ReactomeData <- rename(ReactomeData, -->
+<!--     Pathway_ID = Pathway.identifier, # new name = old name, -->
+<!--     Pathway_Name = Pathway.name, -->
+<!--     Genes = X.Entities.found, -->
+<!--     Genes_In_Pathway = X.Entities.total, -->
+<!--     Genes_Ratio = Entities.ratio, -->
+<!--     p_val = Entities.pValue, -->
+<!--     FDR = Entities.FDR, -->
+<!--     Reactions = X.Reactions.found, -->
+<!--     Reactions_In_Pathway = X.Reactions.total, -->
+<!--     Reactions_Ratio = Reactions.ratio, -->
+<!--     Species_ID = Species.identifier, -->
+<!--     Species_Name = Species.name, -->
+<!--     Genes_Found_Names = Submitted.entities.found, -->
+<!--     Mapped_Entities = Mapped.entities, -->
+<!--     Found_Reaction_IDs = Found.reaction.identifiers -->
+<!--   ) -->
+
+<!-- # Keep only pathways with FRD < 0.05 -->
+<!-- Sig.ReactomeData <- subset(ReactomeData, FDR < 0.05) -->
+<!-- ``` -->
+
+<!-- ### Plot enriched pathways -->
+<!-- ```{r} -->
+<!-- # Focus on Gene Ratio -->
+<!-- geneRatio <- ggplot(Sig.ReactomeData, -->
+<!--             aes(x = Genes_Ratio, y = reorder(Pathway_Name, Genes_Ratio), colour = FDR, size = Genes)) + -->
+<!--   geom_point() + -->
+<!--   scale_colour_gradientn(colours = rainbow(5), guide = "colourbar") + -->
+<!--   expand_limits(color = seq(0, 0.05, by = 0.05)) + -->
+<!--   ggtitle(title) + xlab("Gene Ratio") + ylab("Pathway") + -->
+<!--   xlim(0, NA) + -->
+<!--   theme_bw() + theme(axis.text = element_text(color = "black", size = 10)) -->
+<!-- geneRatio -->
+
+
+<!-- # Focus on Reactions Ratio -->
+<!-- reactionRatio <- ggplot(Sig.ReactomeData, -->
+<!--             aes(x = Reactions_Ratio, y = reorder(Pathway_Name, Reactions_Ratio), colour = FDR, size = Reactions)) + -->
+<!--   geom_point() + -->
+<!--   scale_colour_gradientn(colours = rainbow(5), guide = "colourbar") + -->
+<!--   expand_limits(color = seq(0, 0.05, by = 0.05)) + -->
+<!--   ggtitle(title) + xlab("Reactions Ratio") + ylab("Pathway") + -->
+<!--   xlim(0, NA) + -->
+<!--   theme_bw() + theme(axis.text = element_text(color = "black", size = 10)) -->
+<!-- reactionRatio -->
+<!-- ``` -->
+
+<!-- ### Save Plots -->
+<!-- ```{r} -->
+<!-- Save_File_Path <- -->
+<!--   "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/Plots/Reactome/Mouse_DE_Analysis/Pathway_Enrichment" -->
+
+<!-- # save geneRatio plot -->
+<!-- ggsave(filename = GenePlotName, plot = geneRatio, device = "jpeg", path = Save_File_Path, units = "in", width = 12, height = 10) -->
+
+<!-- # save reactionRatio Plot -->
+<!-- ggsave(filename = ReactionPlotName, plot = reactionRatio, device = "jpeg", path = Save_File_Path, units = "in", width = 12, height = 10) -->
+
+<!-- ``` -->

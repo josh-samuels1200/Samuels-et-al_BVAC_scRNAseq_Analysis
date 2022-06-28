@@ -1,0 +1,793 @@
+---
+title: "Mouse Neurovascular scRNAseq: CSD vs HC Differential Expression Gene Extraction"
+author: "Joshua Samuels"
+date: "9/19/2021"
+output: html_document
+---
+
+### Load Libraries
+
+```{r message=FALSE, warning=FALSE}
+# Load libraries
+library(SingleCellExperiment)
+library(Seurat)
+library(tidyverse)
+library(Matrix)
+library(scales)
+library(cowplot)
+library(RCurl)
+library(BiocManager)
+library(ggplot2)
+library(dplyr)
+library(magrittr)
+library(patchwork)
+library(ggraph)
+library(clustree)
+```
+
+#### Full DE Extraction
+```{r}
+# Un-comment the commented lines below to analyze all clusters in the expanded format
+```
+
+### Load data
+Load the labeled data into "seurat_subset_labeled_full"
+```{r}
+# Load integrated data (after running "Clustering_HBC_method_Josh.Rmd")
+seurat_subset_labeled_full <- readRDS(
+          "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/Data_Objects/Seurat4.0_subset_labeled_full_condensed_Josh_1.22.rds")
+```
+
+## Prepare data for DE analysis between stim conditions
+```{r}
+# Add new column to metadata containing the cell type name for each cluster
+seurat_subset_labeled_full$cell_type <- paste(Idents(seurat_subset_labeled_full))
+
+# Add new column to metadata containing cell type name + stim condition
+seurat_subset_labeled_full$cell_type.stim <- paste(seurat_subset_labeled_full$cell_type, seurat_subset_labeled_full$sample, sep = "_")
+```
+
+### Perform DE analysis within the clusters to compare SD vs. HC gene expression
+```{r}
+# Switch ident to cell_type.stim before proceeding with FindMarkers
+Idents(seurat_subset_labeled_full) <- "cell_type.stim"
+```
+
+```{r}
+# Perform DE analysis using FindMarkers function for each cell_type individually
+# No spaces in final object name
+# Doesn't like "+_", "/", "+", "-"
+```
+
+```{r}
+# Capillary EC
+CellType <- "Capillary EC" # setting up names to call from
+CellType_SD <- "Capillary EC_SD"
+CellType_HC <- "Capillary EC_HC"
+
+# Determine DE genes
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+# Reformat table
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+# Add new column to metadata
+DE_Markers$cluster_ID <- CellType
+
+# Rename DE marker list with cell type identifier
+DE_Capillary_EC <- DE_Markers
+```
+
+```{r}
+# Microglia
+CellType <- "Microglia"
+CellType_SD <- "Microglia_SD"
+CellType_HC <- "Microglia_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_Microglia <- DE_Markers
+```
+
+# ```{r}
+# # Capillary EC 2
+# CellType <- "Capillary EC 2"
+# CellType_SD <- "Capillary EC 2_SD"
+# CellType_HC <- "Capillary EC 2_HC"
+# 
+# DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+# DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+# DE_Markers$cluster_ID <- CellType
+# 
+# DE_Capillary_EC_2 <- DE_Markers
+# ```
+
+```{r}
+# Homeostatic Microglia
+CellType <- "Homeostatic Microglia"
+CellType_SD <- "Homeostatic Microglia_SD"
+CellType_HC <- "Homeostatic Microglia_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_Homeostatic_Microglia <- DE_Markers
+```
+
+```{r}
+# Choroid Plexus Cell
+CellType <- "Choroid Plexus Cell"
+CellType_SD <- "Choroid Plexus Cell_SD"
+CellType_HC <- "Choroid Plexus Cell_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_Choroid_Plexus_Cell <- DE_Markers
+```
+
+# ```{r}
+# # Microglia 2
+# CellType <- "Microglia 2"
+# CellType_SD <- "Microglia 2_SD"
+# CellType_HC <- "Microglia 2_HC"
+# 
+# DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+# DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+# DE_Markers$cluster_ID <- CellType
+# 
+# DE_Microglia_2 <- DE_Markers
+# ```
+
+```{r}
+# IEG+ Microglia
+CellType <- "IEG+ Microglia"
+CellType_SD <- "IEG+ Microglia_SD"
+CellType_HC <- "IEG+ Microglia_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_IEG_Microglia <- DE_Markers
+```
+
+# ```{r}
+# # Microglia 3
+# CellType <- "Microglia 3"
+# CellType_SD <- "Microglia 3_SD"
+# CellType_HC <- "Microglia 3_HC"
+# 
+# DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+# DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+# DE_Markers$cluster_ID <- CellType
+# 
+# DE_Microglia_3 <- DE_Markers
+# ```
+
+# ```{r}
+# # Capillary EC 3
+# CellType <- "Capillary EC 3"
+# CellType_SD <- "Capillary EC 3_SD"
+# CellType_HC <- "Capillary EC 3_HC"
+# 
+# DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+# DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+# DE_Markers$cluster_ID <- CellType
+# 
+# DE_Capillary_EC_3 <- DE_Markers
+# ```
+
+```{r}
+# Pericyte
+CellType <- "Pericyte"
+CellType_SD <- "Pericyte_SD"
+CellType_HC <- "Pericyte_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_Pericyte <- DE_Markers
+```
+
+```{r}
+# Arterial EC
+CellType <- "Arterial EC"
+CellType_SD <- "Arterial EC_SD"
+CellType_HC <- "Arterial EC_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_Arterial_EC <- DE_Markers
+```
+
+```{r}
+# IEG+ Capillary EC
+CellType <- "IEG+ Capillary EC"
+CellType_SD <- "IEG+ Capillary EC_SD"
+CellType_HC <- "IEG+ Capillary EC_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_IEG_Capillary_EC <- DE_Markers
+```
+
+# ```{r}
+# # Choroid Plexus Cell 2
+# CellType <- "Choroid Plexus Cell 2"
+# CellType_SD <- "Choroid Plexus Cell 2_SD"
+# CellType_HC <- "Choroid Plexus Cell 2_HC"
+# 
+# DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+# DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+# DE_Markers$cluster_ID <- CellType
+# 
+# DE_Choroid_Plexus_Cell_2 <- DE_Markers
+# ```
+
+```{r}
+# Arterial SMC
+CellType <- "Arterial SMC"
+CellType_SD <- "Arterial SMC_SD"
+CellType_HC <- "Arterial SMC_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_Arterial_SMC <- DE_Markers
+```
+
+# ```{r}
+# # Choroid Plexus Cell 3
+# CellType <- "Choroid Plexus Cell 3"
+# CellType_SD <- "Choroid Plexus Cell 3_SD"
+# CellType_HC <- "Choroid Plexus Cell 3_HC"
+# 
+# DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+# DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+# DE_Markers$cluster_ID <- CellType
+# 
+# DE_Choroid_Plexus_Cell_3 <- DE_Markers
+# ```
+
+```{r}
+# Arterial SMC / Pericyte Doublet
+CellType <- "Arterial SMC / Pericyte Doublet"
+CellType_SD <- "Arterial SMC / Pericyte Doublet_SD"
+CellType_HC <- "Arterial SMC / Pericyte Doublet_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_Arterial_SMC_Pericyte_Doublet <- DE_Markers
+```
+
+```{r}
+# Astrocyte
+CellType <- "Astrocyte"
+CellType_SD <- "Astrocyte_SD"
+CellType_HC <- "Astrocyte_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_Astrocyte <- DE_Markers
+```
+
+```{r}
+# Ependymal Cell
+CellType <- "Ependymal Cell"
+CellType_SD <- "Ependymal Cell_SD"
+CellType_HC <- "Ependymal Cell_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_Ependymal_Cell <- DE_Markers
+```
+
+```{r}
+# T Cell
+CellType <- "T Cell"
+CellType_SD <- "T Cell_SD"
+CellType_HC <- "T Cell_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_T_Cell <- DE_Markers
+```
+
+```{r}
+# Venous EC
+CellType <- "Venous EC"
+CellType_SD <- "Venous EC_SD"
+CellType_HC <- "Venous EC_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_Venous_EC <- DE_Markers
+```
+
+```{r}
+# Border Associated Macrophage
+CellType <- "Border Associated Macrophage"
+CellType_SD <- "Border Associated Macrophage_SD"
+CellType_HC <- "Border Associated Macrophage_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_Border_Associated_Macrophage <- DE_Markers
+```
+
+```{r}
+# Fibroblast
+CellType <- "Fibroblast"
+CellType_SD <- "Fibroblast_SD"
+CellType_HC <- "Fibroblast_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_Fibroblast <- DE_Markers
+```
+
+```{r}
+# Ccr2+ Monocyte/Macrophage
+CellType <- "Ccr2+ Monocyte/Macrophage"
+CellType_SD <- "Ccr2+ Monocyte/Macrophage_SD"
+CellType_HC <- "Ccr2+ Monocyte/Macrophage_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_Ccr2_Monocyte_Macrophage <- DE_Markers
+```
+
+```{r}
+# Reactive Astrocyte
+CellType <- "Reactive Astrocyte"
+CellType_SD <- "Reactive Astrocyte_SD"
+CellType_HC <- "Reactive Astrocyte_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_Reactive_Astrocyte <- DE_Markers
+```
+
+```{r}
+# OPC 1
+CellType <- "OPC 1"
+CellType_SD <- "OPC 1_SD"
+CellType_HC <- "OPC 1_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_OPC_1 <- DE_Markers
+```
+
+```{r}
+# NPY+ Cell
+CellType <- "NPY+ Cell"
+CellType_SD <- "NPY+ Cell_SD"
+CellType_HC <- "NPY+ Cell_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_NPY_Cell <- DE_Markers
+```
+
+```{r}
+# B Cell
+CellType <- "B Cell"
+CellType_SD <- "B Cell_SD"
+CellType_HC <- "B Cell_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_B_Cell <- DE_Markers
+```
+
+```{r}
+# OPC 2
+CellType <- "OPC 2"
+CellType_SD <- "OPC 2_SD"
+CellType_HC <- "OPC 2_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_OPC_2 <- DE_Markers
+```
+
+```{r}
+# Glutamatergic Neuron
+CellType <- "Glutamatergic Neuron"
+CellType_SD <- "Glutamatergic Neuron_SD"
+CellType_HC <- "Glutamatergic Neuron_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_Glutamatergic_Neuron <- DE_Markers
+```
+
+```{r}
+# Fenestrated EC
+CellType <- "Fenestrated EC"
+CellType_SD <- "Fenestrated EC_SD"
+CellType_HC <- "Fenestrated EC_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_Fenestrated_EC <- DE_Markers
+```
+
+```{r}
+# GABAergic Neuron
+CellType <- "GABAergic Neuron"
+CellType_SD <- "GABAergic Neuron_SD"
+CellType_HC <- "GABAergic Neuron_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_GABAergic_Neuron <- DE_Markers
+```
+
+```{r}
+# Myelin-Forming Oligodendrocyte
+CellType <- "Myelin-Forming Oligodendrocyte"
+CellType_SD <- "Myelin-Forming Oligodendrocyte_SD"
+CellType_HC <- "Myelin-Forming Oligodendrocyte_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_Myelin_Forming_Oligodendrocyte <- DE_Markers
+```
+
+```{r}
+# Bind all DE gene lists into 1 composite list (creates a stacked list with no omissions)
+DE_All_Cells <- rbind(
+  DE_Capillary_EC,
+  DE_Microglia,
+  # DE_Capillary_EC_2,
+  DE_Homeostatic_Microglia,
+  DE_Choroid_Plexus_Cell,
+  # DE_Microglia_2,
+  DE_IEG_Microglia,
+  # DE_Microglia_3,
+  # DE_Capillary_EC_3,
+  DE_Pericyte,
+  DE_Arterial_EC,
+  DE_IEG_Capillary_EC,
+  # DE_Choroid_Plexus_Cell_2,
+  DE_Arterial_SMC,
+  # DE_Choroid_Plexus_Cell_3,
+  DE_Arterial_SMC_Pericyte_Doublet,
+  DE_Astrocyte,
+  DE_Ependymal_Cell,
+  DE_T_Cell,
+  DE_Venous_EC,
+  DE_Border_Associated_Macrophage,
+  DE_Fibroblast,
+  DE_Ccr2_Monocyte_Macrophage,
+  DE_Reactive_Astrocyte,
+  DE_OPC_1,
+  DE_NPY_Cell,
+  DE_OPC_2,
+  DE_Glutamatergic_Neuron,
+  DE_Fenestrated_EC,
+  DE_GABAergic_Neuron,
+  DE_Myelin_Forming_Oligodendrocyte
+  )
+
+# Subset DE gene list to only include genes that are p_val_adj < 0.05
+DE_All_Cells_p_val_adj_0.05 <- subset(DE_All_Cells, p_val_adj < 0.05)
+```
+
+```{r}
+# Export DE marker list to .csv file. Make sure to save file as .xls file prior to further manupulation!
+write.csv(DE_All_Cells_p_val_adj_0.05, file = 
+            "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/Gene_Lists/Seurat4.0_All_DE_Markers_p_val_adj_0.05_SD_vs_HC_condensed_Josh_1.22.csv")
+```
+
+
+#### EC DE Extraction
+
+### Load data
+Load the labeled data into "seurat_subset_labeled_full"
+```{r}
+# Load integrated data (after running "Clustering_HBC_method_Josh.Rmd")
+seurat_subset_labeled_full <- readRDS(
+          "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/Data_Objects/Seurat4.0_EC_subset_labeled_Josh_8.21.rds")
+```
+
+## Prepare data for DE analysis between stim conditions
+```{r}
+# Add new column to metadata containing the cell type name for each cluster
+seurat_subset_labeled_full$cell_type <- paste(Idents(seurat_subset_labeled_full))
+
+# Add new column to metadata containing cell type name + stim condition
+seurat_subset_labeled_full$cell_type.stim <- paste(seurat_subset_labeled_full$cell_type, seurat_subset_labeled_full$sample, sep = "_")
+```
+
+### Perform DE analysis within the clusters to compare SD vs. HC gene expression
+```{r}
+# Switch ident to cell_type.stim before proceeding with FindMarkers
+Idents(seurat_subset_labeled_full) <- "cell_type.stim"
+```
+
+```{r}
+# Perform DE analysis using FindMarkers function for each cell_type individually
+# No spaces in final object name
+# Doesn't like "+_", "/", "+", "-"
+```
+
+```{r}
+# Capillary EC 1
+CellType <- "Capilary EC 1"
+CellType_SD <- "Capilary EC 1_SD"
+CellType_HC <- "Capilary EC 1_HC"
+
+# Determine DE genes
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+# Reformat table
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+# Add new column to metadata
+DE_Markers$cluster_ID <- CellType
+
+DE_Capillary_EC_1 <- DE_Markers
+```
+
+```{r}
+# Capillary EC 2
+CellType <- "Capillary EC 2"
+CellType_SD <- "Capillary EC 2_SD"
+CellType_HC <- "Capillary EC 2_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_Capillary_EC_2 <- DE_Markers
+```
+
+```{r}
+# Capillary EC 3
+CellType <- "Capillary EC 3"
+CellType_SD <- "Capillary EC 3_SD"
+CellType_HC <- "Capillary EC 3_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_Capillary_EC_3 <- DE_Markers
+```
+
+```{r}
+# Arterial EC
+CellType <- "Arterial EC"
+CellType_SD <- "Arterial EC_SD"
+CellType_HC <- "Arterial EC_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_Arterial_EC <- DE_Markers
+```
+
+```{r}
+# IEG+ Capillary EC
+CellType <- "IEG+ Capillary"
+CellType_SD <- "IEG+ Capillary_SD"
+CellType_HC <- "IEG+ Capillary_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_IEG_Capillary_EC <- DE_Markers
+```
+
+```{r}
+# Venous EC
+CellType <- "Venous EC"
+CellType_SD <- "Venous EC_SD"
+CellType_HC <- "Venous EC_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_Venous_EC <- DE_Markers
+```
+
+```{r}
+# Fenestrated EC
+CellType <- "Fenestrated EC"
+CellType_SD <- "Fenestrated EC_SD"
+CellType_HC <- "Fenestrated EC_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_Fenestrated_EC <- DE_Markers
+```
+
+```{r}
+# Bind all DE gene lists into 1 composite list
+DE_EC_Cells <- rbind(
+  DE_Capillary_EC_1,
+  DE_Capillary_EC_2,
+  DE_Capillary_EC_3,
+  DE_Arterial_EC,
+  DE_IEG_Capillary_EC,
+  DE_Venous_EC,
+  DE_Fenestrated_EC
+  )
+
+# Subset DE gene list to only include genes that are p_val_adj < 0.05
+DE_EC_Cells_p_val_adj_0.05 <- subset(DE_EC_Cells, p_val_adj < 0.05)
+```
+
+```{r}
+# Export DE marker list to .csv file. Make sure to save file as .xls file!
+write.csv(DE_EC_Cells_p_val_adj_0.05, file = 
+            "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/Gene_Lists/Seurat4.0_EC_DE_Markers_p_val_adj_0.05_SD_vs_HC__Josh_2.19.csv")
+```
+
+
+#### MG DE Extraction
+
+### Load data
+
+Load the labeled data into "seurat_subset_labeled_full"
+```{r}
+# Load integrated data (after running "Clustering_HBC_method_Josh.Rmd")
+seurat_subset_labeled_full <- readRDS(
+          "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/Data_Objects/Seurat4.0_MG_subset_labeled_Josh_8.21.rds")
+```
+
+## Prepare data for DE analysis between stim conditions
+```{r}
+# Add new column to metadata containing the cell type name for each cluster
+seurat_subset_labeled_full$cell_type <- paste(Idents(seurat_subset_labeled_full))
+
+# Add new column to metadata containing cell type name + stim condition
+seurat_subset_labeled_full$cell_type.stim <- paste(seurat_subset_labeled_full$cell_type, seurat_subset_labeled_full$sample, sep = "_")
+```
+
+### Perform DE analysis within the clusters to compare SD vs. HC gene expression
+```{r}
+# Switch ident to cell_type.stim before proceeding with FindMarkers
+Idents(seurat_subset_labeled_full) <- "cell_type.stim"
+```
+
+```{r}
+# Perform DE analysis using FindMarkers function for each cell_type individually
+# No spaces in final object name
+# Doesn't like "+_", "/", "+", "-"
+```
+
+```{r}
+# Microglia 1
+CellType <- "Microglia 1"
+CellType_SD <- "Microglia 1_SD"
+CellType_HC <- "Microglia 1_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_Microglia_1 <- DE_Markers
+```
+
+```{r}
+# Homeostatic Microglia
+CellType <- "Homeostatic Microglia"
+CellType_SD <- "Homeostatic Microglia_SD"
+CellType_HC <- "Homeostatic Microglia_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_Homeostatic_Microglia <- DE_Markers
+```
+
+```{r}
+# Microglia 2
+CellType <- "Microglia 2"
+CellType_SD <- "Microglia 2_SD"
+CellType_HC <- "Microglia 2_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_Microglia_2 <- DE_Markers
+```
+
+```{r}
+# IEG+ Microglia
+CellType <- "IEG+ Microglia"
+CellType_SD <- "IEG+ Microglia_SD"
+CellType_HC <- "IEG+ Microglia_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_IEG_Microglia <- DE_Markers
+```
+
+```{r}
+# Microglia 3
+CellType <- "Microglia 3"
+CellType_SD <- "Microglia 3_SD"
+CellType_HC <- "Microglia 3_HC"
+
+DE_Markers<- FindMarkers(seurat_subset_labeled_full, ident.1 = CellType_SD, ident.2 = CellType_HC, logfc.threshold = 0.1)
+DE_Markers <- tibble::rownames_to_column(DE_Markers, "#Gene")
+DE_Markers$cluster_ID <- CellType
+
+DE_Microglia_3 <- DE_Markers
+```
+
+```{r}
+# Bind all DE gene lists into 1 composite list
+DE_MG_Cells <- rbind(
+  DE_Microglia_1,
+  DE_Homeostatic_Microglia,
+  DE_Microglia_2,
+  DE_IEG_Microglia,
+  DE_Microglia_3
+  )
+
+# Subset DE gene list to only include genes that are p_val_adj < 0.05
+DE_MG_Cells_p_val_adj_0.05 <- subset(DE_MG_Cells, p_val_adj < 0.05)
+```
+
+```{r}
+# Export DE marker list to .csv file. Make sure to save file as .xls file!
+write.csv(DE_MG_Cells_p_val_adj_0.05, file = 
+            "D:/Research/NIH/Herkenham_Lab/10X_Neurovascular_scRNAseq/Gene_Lists/Seurat4.0_MG_DE_Markers_p_val_adj_0.05_SD_vs_HC_Josh_2.19.csv")
+```
+
