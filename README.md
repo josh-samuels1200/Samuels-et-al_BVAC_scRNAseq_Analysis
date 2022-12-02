@@ -1,5 +1,5 @@
-# Samuels-et-al-2022_BVAC_scRNAseq_Analysis
-Workflow and R code associated with Samuels et al 2022 - BVAC scRNAseq:
+# Samuels-et-al_BVAC_scRNAseq_Analysis
+Workflow and R code associated with Samuels et al - BVAC scRNAseq:
 
 Chronic social defeat alters brain vascular-associated cell gene expression patterns leading to vascular dysfunction and immune system activation 
 Joshua D. Samuels*, Madison L. Lotstein, Michael L. Lehmann, Abdel G. Elkahloun, Subhadra Banerjee, & Miles Herkenham
