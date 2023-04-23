@@ -7,7 +7,7 @@ Joshua D. Samuels*, Madison L. Lotstein, Michael L. Lehmann, Abdel G. Elkahloun,
 `*` Corresponding author at rhk9gh@virginia.edu
 
 
-The R folder contains the R code used in the workflow to process and analyze the CSD1, CSD2, HC1, and HC2 scRNAseq samples. The packages and versions at the time the analysis was conduced can be found in the RStudio-Packages-and-Versions file.
+The R folder contains the R code used in the workflow to process and analyze the CSD1, CSD2, HC1, and HC2 scRNAseq samples. The packages and versions at the time the analysis was conduced can be found in the RStudio-Packages-and-Versions file. The workflow is shown below and can also be found in the Mouse_Neurovascular_RNAseq_Workflow file.
 
 
 Mouse BVAC scRNAseq Workflow:
@@ -25,6 +25,9 @@ Mouse BVAC scRNAseq Workflow:
 
 5. R/Mouse_Neurovascular_scRNAseq_Cluster_Interrogation
 - Used to examine clusters by gene expression, create feature plots, and make heatmaps
+
+6. R/Mouse_Neurovascular_scRNAseq_CellChat_Analysis
+- CellChat analysis of cell-cell communication and ligand-receptor interactions
 
 Other Important Scripts:
 1. R/R_Package_and_Version_Extraction_Code
